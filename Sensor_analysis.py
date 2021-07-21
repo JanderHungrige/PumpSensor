@@ -4,6 +4,22 @@
 Created on Thu Jul 15 16:16:12 2021
 
 @author: Jan Werth
+This script uses the data from https://ga-data-cases.s3.eu-central-1.amazonaws.com/pump_sensor.zip
+
+Here we take a look at the data to see what is usefull information and how to manipulate the data.
+
+ToDo: 
+   next step would be to remove outliers with z-score
+   
+   also try not to remove sensors 'sensor_06','sensor_07','sensor_08','sensor_09'. How would the results change
+      
+   optimize line 96  data=data.drop(labels=['sensor_06','sensor_07','sensor_08','sensor_09'],axis=1)
+   Here we create a copy which might lead to crashes
+   
+   Look furhter into the future than 10min
+   
+   Try GRU / Transformers for better performance (and maybe Random forrest for embedded devices)
+
 """
 
 import pandas as pd
@@ -57,21 +73,32 @@ def plotting_merged(data, encoded_y, senorname, saving=False):
             fig.savefig('Sensor_'+str(i)+'.png', format='png', dpi=300, transparent=True)
         plt.show()    
 
-def plotting_together(data): 
+def plotting_together(Values): 
     fig=plt.Figure()
     Values.plot(subplots = True, sharex = True, figsize=(30,55))    
     plt.savefig('Overview.png', format='png', dpi=300, transparent=True)
-    plt.show         
+    plt.show      
+    
+def plot_Y(data, saving=False, name='target'):
+    import numpy as np
+    y=data['machine_status']; x=np.linspace(1,len(y),len(y))
+    plt.stem(x,y)
+    plt.ylabel('class')
+    labels = ['Broken', 'Normal', 'Recovering']
+    plt.yticks([1,0,2], labels, rotation='vertical')
+    if saving==True:
+        plt.savefig(name+'.png', format='png', dpi=300, transparent=True)
+    plt.show()    
     
 def manipulate_X(data, printplot=False):
     data['sensor_51'][110000:140000]=data['sensor_50'][110000:140000] # repair sensor 51
     data=data.drop(labels=['sensor_00','sensor_15','sensor_37','sensor_50'],axis=1)#bad sensors
     data=data.drop(labels=['sensor_06','sensor_07','sensor_08','sensor_09'],axis=1)# low varianz#NaNs
     data=data.fillna(method="pad",limit=30)
-    data=data.dropna()
+    #data=data.dropna()
     if printplot==True:
         print((data.isna().sum()))
-        plotting_stuff((data.isna().sum()[2:-1]),'bar','Manipulated-NaN-drop12filldrop',saving=True)
+        plotting_stuff((data.isna().sum()[2:-1]),'bar','Manipulated-NaN-drop12fill',saving=True)
         
 
     return data
@@ -89,12 +116,14 @@ def Vorverarbeitung_Y(data):
     return pd.DataFrame(encoded_y,columns=['target'])
 
 
+
 if __name__ == '__main__': 
     
     dat,senorname=read_data('pump_sensor.csv')
     
     Kopf,Schwanz, verstehen=explore(dat)
     
+
     
     '''
     Checking for Nans, 
@@ -103,16 +132,16 @@ if __name__ == '__main__':
     verstehen_std=verstehen.loc[['std']][senorname]
     verstehen_var=verstehen.loc[['var']][senorname]
 
-    
-    #plotting_stuff((dat.isna().sum())[2:-1],'bar','Raw-NaN',saving=True) # show which sensors have how many NANs
-    plotting_stuff(verstehen_std.transpose(),'bar','std',saving=True)# Show std
-    plotting_stuff(verstehen_var.transpose(),'bar','var',saving=True)# Show std
+    #plot_Y(dat,True)
+    plotting_stuff((dat.isna().sum())[2:-1],'bar','Raw-NaN',saving=False) # show which sensors have how many NANs
+   # plotting_stuff(verstehen_std.transpose(),'bar','std',saving=True)# Show std
+    #plotting_stuff(verstehen_var.transpose(),'bar','var',saving=True)# Show std
     '''
     renoving NaNs
     removing faulty sensors
     removing low varianz sensors
     '''
-    #manipulate_X(dat, printplot=True)
+    manipulate_X(dat, printplot=True)
     
     '''
     Plotting the sensor signals raw
@@ -123,9 +152,9 @@ if __name__ == '__main__':
     '''
     Plotting sensor and label together
     '''
-    encoded_y=Vorverarbeitung_Y(dat['machine_status'])
-    Values=pd.concat([dat[senorname],encoded_y],axis=1)#.reindex(dat.index)
-    plotting_merged(dat[senorname],encoded_y, senorname,saving=True)# plot each singal with target
+    #encoded_y=Vorverarbeitung_Y(dat['machine_status'])
+    #Values=pd.concat([dat[senorname],encoded_y],axis=1)#.reindex(dat.index)
+    #plotting_merged(dat[senorname],encoded_y, senorname,saving=True)# plot each singal with target
     #plotting_together(Values) #plot all signals together with target
 
     

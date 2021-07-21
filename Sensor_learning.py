@@ -3,7 +3,25 @@
 """
 Created on Tue Jul 20 11:35:39 2021
 
-@author: base
+@author: Jan Werth
+
+Here we us the maniulated data which we analyzed in Sensor_analysis.py 
+
+
+1# Here we first load the data.
+2# Then we map the target strings to int
+3# Scale the Sensor data between 0-1 with MinMax scaler
+4# transform the timeseries into a supervised learning dataset. This is done by creating a moving window with the pandas shift function:
+    Thanks to Jason Brownlee
+5# Split the data in TRain Val Test based on visualinspection so that each has at least one failure in the set
+6# One hot encode the target for class prediction. Signal prediction does not need the one hot encoding
+7# Setup the model (use the functional api one). The model has two outputs. One for signal prediction and one for class prediction
+8# Train or load the model
+9# plot the results
+
+toDo :    
+  Attention: test_x  is also shited. meaning the plot does not account for the prediction?? 
+  Result: test_y_raw did not show any difference!? interesting.
 """
 
 import pandas as pd
@@ -18,23 +36,7 @@ import tensorflow as tf
 
 
 
-'''
-1# Here we first load the data.
-2# Then we map the target strings to int
-3# Scale the Sensor data between 0-1 with MinMax scaler
-4# transform the timeseries into a supervised learning dataset. This is done by creating a moving window with the pandas shift function:
-    Thanks to Jason Brownlee
-5# Split the data in TRain Val Test based on visualinspection so that each has at least one failure in the set
-6# One hot encode the target for class prediction. Signal prediction does not need the one hot encoding
-7# Setup the model (use the functional api one). The model has two outputs. One for signal prediction and one for class prediction
-8# Train or load the model
-9# plot the results
 
-toDo : 
-    at the moment we only predict one timestep due to shifting the set by 1. Add more shift to get a better look into the future. 
-    
-  Attention: test_x  is also shited. meaning the plot does not account for the prediction??
-'''
 
 def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
     n_vars = 1 if type(data) is list else data.shape[1]
@@ -58,6 +60,46 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
     if dropnan:
         agg.dropna(inplace=True)
     return agg
+
+def splitting_data(data_x,data_y):    
+    train_X=data_x[0:120000].values
+    train_Y=data_y[0:120000].values
+    
+    val_X=data_x[140000::].values
+    val_Y=data_y[140000::].values
+    
+    test_X=data_x[120000:140000].values
+    test_Y=data_y[120000:140000].values
+    test_Y_raw=test_y_raw[120000:140000].values
+      
+    train_X.astype('float32')
+    val_X.astype('float32')
+    test_X.astype('float32')
+    
+    
+    #one hot encode the targets for class prediction/ not for signal prediction
+    from sklearn.preprocessing import OneHotEncoder
+    
+    oneHot=OneHotEncoder()
+    oneHot.fit(train_Y.reshape(-1,1))
+    
+    train_Y_Hot=oneHot.transform(train_Y.reshape(-1,1)).toarray()
+    val_Y_Hot  =oneHot.transform(val_Y.reshape(-1,1)).toarray()
+    test_Y_Hot =oneHot.transform(test_Y.reshape(-1,1)).toarray()
+    
+    # reshape for input 
+    timesteps=1
+    samples_T=int(np.floor(train_X.shape[0]/timesteps))
+    samples_V=int(np.floor(val_X.shape[0]/timesteps))
+    samples_Te=int(np.floor(test_X.shape[0]/timesteps))
+
+    
+    train_X=train_X.reshape((samples_T,timesteps,train_X.shape[1]))   #samples, timesteps, sensors   
+    val_X=val_X.reshape((samples_V,timesteps,val_X.shape[1]))       
+    test_X=test_X.reshape((samples_Te,timesteps,test_X.shape[1]))   
+    
+    return train_X,train_Y,val_X,val_Y,test_X,test_Y,test_Y_raw,train_Y_Hot,val_Y_Hot,test_Y_Hot
+
 
 def model_setup_seq(in_shape):
     from tensorflow.keras.models import Sequential
@@ -94,6 +136,7 @@ def model_setup_Fapi(in_shape):
                          optimizer='adam',
                          metrics={'class_out':'acc'})
     
+    print(model.summary())
     return model
 
 def plot_training(history,saving=False,name='training'):
@@ -163,44 +206,12 @@ if __name__ == '__main__':
 # %%   
 #CREATE TRAIN/VAL/TEST SETS
     # We split the data that all sets have at least one error in. But shuffeling is not allowed. Therfore, we do it manually
-    train_X=data_x[0:120000].values
-    train_Y=data_y[0:120000].values
     
-    val_X=data_x[140000::].values
-    val_Y=data_y[140000::].values
-    
-    test_X=data_x[120000:140000].values
-    test_Y=data_y[120000:140000].values
-    test_Y_raw=test_y_raw[120000:140000].values
-      
-    train_X.astype('float32')
-    val_X.astype('float32')
-    test_X.astype('float32')
-    
-    
-    #one hot encode the targets for class prediction/ not for signal prediction
-    from sklearn.preprocessing import OneHotEncoder
-    
-    oneHot=OneHotEncoder()
-    oneHot.fit(train_Y.reshape(-1,1))
-    
-    train_Y_Hot=oneHot.transform(train_Y.reshape(-1,1)).toarray()
-    val_Y_Hot  =oneHot.transform(val_Y.reshape(-1,1)).toarray()
-    test_Y_Hot =oneHot.transform(test_Y.reshape(-1,1)).toarray()
-    
-    # reshape for input 
-    timesteps=1
-    samples_T=int(np.floor(train_X.shape[0]/timesteps))
-    samples_V=int(np.floor(val_X.shape[0]/timesteps))
-    samples_Te=int(np.floor(test_X.shape[0]/timesteps))
-
-    
-    train_X=train_X.reshape((samples_T,timesteps,train_X.shape[1]))   #samples, timesteps, sensors   
-    val_X=val_X.reshape((samples_V,timesteps,val_X.shape[1]))       
-    test_X=test_X.reshape((samples_Te,timesteps,test_X.shape[1]))   
-    
+    train_X,train_Y,val_X,val_Y,test_X,test_Y,test_Y_raw,train_Y_Hot,val_Y_Hot,test_Y_Hot=splitting_data(data_x,data_y)
     inputshape_X=(train_X.shape)
     #print(inputshape_X)
+    
+    
     
 # %%
 # TRAIN THE MODEL    
@@ -212,7 +223,7 @@ if __name__ == '__main__':
     
         model=model_setup_Fapi(inputshape_X)
         history = model.fit(train_X, [train_Y, train_Y_Hot], epochs=70, batch_size=32, validation_data=(val_X, [val_Y,val_Y_Hot]), shuffle=False)
-        plot_training(history,saving=True,name='training')  
+        plot_training(history,saving=True,name=('training'+ str(Future)))  
         model.save('./model/Pump_LSTM_Fapi_'+ str(Future))
 
 # or load the model  

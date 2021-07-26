@@ -5,7 +5,7 @@
 <br><br>
 **Summary**
 
-This Repo will analyze the sensor data of several pumps. You can find the data here: ![Data](https://ga-data-cases.s3.eu-central-1.amazonaws.com/pump_sensor.zip)
+This Repo will analyze the sensor data of several pumps. You can find the data here: ![Data](https://www.kaggle.com/nphantawee/pump-sensor-data)
 
 After a first analysis, we will use a simple LSTM to predict 10min into the future to detect any upcoming failures.
 <br><br>

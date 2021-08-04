@@ -27,7 +27,7 @@ The Data is composed like this:
 
 We use the following simple LSTM to predict the classes:
 
-![alt](images/model.png?raw=true)
+![alt](images/model42.png?raw=true)
 
 With this simple model, we achieved a prediction that should be sufficient to warn the teams 10min in advance about a pump failure. 
 

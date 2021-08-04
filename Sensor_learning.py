@@ -35,9 +35,6 @@ from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 
 
-
-
-
 def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
     n_vars = 1 if type(data) is list else data.shape[1]
     df = pd.DataFrame(data)
@@ -45,14 +42,14 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
     # input sequence (t-n, ... t-1)
     for i in range(n_in, 0, -1):
         cols.append(df.shift(i))
-        namen +=[('sensor%d(t-%d)' %(j-1, i)) for j in range (n_vars)]
+        namen +=[('sensor%d(t-%d)' %(j+1, i)) for j in range (n_vars)]
         #forecast sequence (t, t+1, ... t+n)
     for i in range(0, n_out):
         cols.append(df.shift(-i))
         if i == 0:
             namen +=[('sensor%d(t)' %(j+1)) for j in range (n_vars)]
         else:
-            namen +=[('sensor%d(t+%d)' %(j+1, i)) for j in range (n_vars)]
+            namen +=[('sensor%d(t+%d)' '%'(j+1, i)) for j in range (n_vars)]
     # put it all together
     agg = pd.concat(cols, axis=1)
     agg.columns=namen
@@ -61,7 +58,7 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
         agg.dropna(inplace=True)
     return agg
 
-def splitting_data(data_x,data_y):    
+def splitting_and_shape_data(data_x,data_y):    
     train_X=data_x[0:120000].values
     train_Y=data_y[0:120000].values
     
@@ -70,14 +67,23 @@ def splitting_data(data_x,data_y):
     
     test_X=data_x[120000:140000].values
     test_Y=data_y[120000:140000].values
-    test_Y_raw=test_y_raw[120000:140000].values
       
     train_X.astype('float32')
     val_X.astype('float32')
     test_X.astype('float32')
     
-    
+    return train_X,train_Y,val_X,val_Y,test_X,test_Y,    
+
+def reshape_for_Lstm(data):    
+    # reshape for input 
+    timesteps=1
+    samples=int(np.floor(data.shape[0]/timesteps))
+
+    data=data.reshape((samples,timesteps,data.shape[1]))   #samples, timesteps, sensors     
+    return data
+
     #one hot encode the targets for class prediction/ not for signal prediction
+def one_hot(train_Y,val_Y,test_Y):    
     from sklearn.preprocessing import OneHotEncoder
     
     oneHot=OneHotEncoder()
@@ -87,18 +93,7 @@ def splitting_data(data_x,data_y):
     val_Y_Hot  =oneHot.transform(val_Y.reshape(-1,1)).toarray()
     test_Y_Hot =oneHot.transform(test_Y.reshape(-1,1)).toarray()
     
-    # reshape for input 
-    timesteps=1
-    samples_T=int(np.floor(train_X.shape[0]/timesteps))
-    samples_V=int(np.floor(val_X.shape[0]/timesteps))
-    samples_Te=int(np.floor(test_X.shape[0]/timesteps))
-
-    
-    train_X=train_X.reshape((samples_T,timesteps,train_X.shape[1]))   #samples, timesteps, sensors   
-    val_X=val_X.reshape((samples_V,timesteps,val_X.shape[1]))       
-    test_X=test_X.reshape((samples_Te,timesteps,test_X.shape[1]))   
-    
-    return train_X,train_Y,val_X,val_Y,test_X,test_Y,test_Y_raw,train_Y_Hot,val_Y_Hot,test_Y_Hot
+    return train_Y_Hot,val_Y_Hot,test_Y_Hot
 
 
 def model_setup_seq(in_shape):
@@ -124,8 +119,8 @@ def model_setup_Fapi(in_shape):
     from tensorflow.keras.layers import Dense
     
     inputs= tf.keras.Input(shape=(in_shape[1],in_shape[2]))
-    x=LSTM(2,activation='relu', input_shape=(in_shape[1],in_shape[2]),return_sequences=True)(inputs)
-    x=LSTM(32,activation='relu')(x)
+    x=LSTM(42,activation='relu', input_shape=(in_shape[1],in_shape[2]),return_sequences=True)(inputs)
+    x=LSTM(42,activation='relu')(x)
     out_signal=Dense(1, name='signal_out')(x)
     out_class=Dense(3,activation='softmax', name='class_out')(x)
     
@@ -139,18 +134,28 @@ def model_setup_Fapi(in_shape):
     print(model.summary())
     return model
 
-def plot_training(history,saving=False,name='training'):
+def plot_training(history,what='loss',saving=False,name='training'):
     fig=plt.figure()
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
+    plt.plot(history[0])
+    plt.plot(history[1])
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'])
+    if what=='loss':
+        plt.title('model loss')
+        plt.ylabel('loss')
+    elif what=='acc':   
+        plt.title('model Acc')
+        plt.ylabel('Accuracy')   
+    if saving==True:
+        fig.savefig( name +'_'+ what + '.png', format='png', dpi=300, transparent=True)
+
+
     plt.xlabel('epoch')
     plt.legend(['train', 'test'])
     if saving==True:
-        fig.savefig( name +'.png', format='png', dpi=300, transparent=True)
+        fig.savefig( name +'_ACC.png', format='png', dpi=300, transparent=True)  
     plt.show()
-            
+    
 def plot_signal_hat(Y_test,Y_hat,saving=False,name='results_signal'):
     fig= plt.figure()
     plt.plot(Y_hat)
@@ -163,6 +168,7 @@ def plot_signal_hat(Y_test,Y_hat,saving=False,name='results_signal'):
     plt.show()
         
 def plot_class_hat(Y_hat,Y_test,saving=False,name='results_class'):   
+    # HERE WE TRY TO PLOT MULTICOLOR BASED ON PROBABILITY VALUE, BUT IT DOES NOT WOR. IMPUT WELCOME
     import matplotlib.pyplot as plt
     from matplotlib import cm
     import numpy as np
@@ -176,8 +182,7 @@ def plot_class_hat(Y_hat,Y_test,saving=False,name='results_class'):
     if saving==True:
         fig.savefig( name +'.png', format='png', dpi=300, transparent=True)
     plt.show()
-    
-    
+       
 #%%    
 if __name__ == '__main__':
     
@@ -190,57 +195,81 @@ if __name__ == '__main__':
 
 #PREPROCESS DATA   
     Values=manipulate_X(Values, printplot=False); sensorname=Values.keys()[:-1] 
-    test_y_raw=Values['target'] #get unshifted test targets
-    scaler=MinMaxScaler().fit(Values[sensorname].values)
-    scaled_features=scaler.transform(Values[sensorname].values) # scale only x
-    data_scaled = pd.DataFrame(scaled_features, index=Values[sensorname].index, columns=Values[sensorname].columns) # back to pandas
-    data_scaled=  pd.concat([data_scaled,Values['target']],axis=1)
+
 #CREATE WINDOWED DATA
-    Future=20
-    data_win=series_to_supervised(data_scaled, n_in=Future, n_out=1)
-    to_remove_list =['sensor'+str(n)+'(t)' for n in range(1,46)] #now remove all non shifted elements again. so we retreive elements and shifted target
-    data_y=data_win.iloc[:,-1]
-    data_x=data_win; data_x=data_win.drop(to_remove_list, axis=1) #remove sensors(t)
-    data_x.drop(data_x.columns[len(data_x.columns)-1], axis=1, inplace=True)# remove target(t-1). we use target(t)
+    Future=1
+
+    data_win=series_to_supervised(Values, n_in=Future, n_out=1)
+    to_remove_list =['sensor'+str(n)+'(t)' for n in range(1,len(Values.columns)+1)] #now remove all non shifted elements again. so we retreive elements and shifted target
+    #to_remove_list_2 =['sensor'+str(n)+'(t-'+ str(i)+')' for n in range(1,len(data_scaled.columns)+1) for i in range(1,Future)] #now remove all non shifted elements again. so we retreive elements and shifted target
+    #to_remove_list=to_remove_list_1+to_remove_list_2
+    data_y=data_win.iloc[:,-1] #Get the target data out before removing unwanted data
+    data_x=data_win.drop(to_remove_list, axis=1) #remove sensors(t)
+    data_x.drop(data_x.columns[len(data_x.columns)-1], axis=1, inplace=True)# remove target(t-n)
     
 # %%   
 #CREATE TRAIN/VAL/TEST SETS
     # We split the data that all sets have at least one error in. But shuffeling is not allowed. Therfore, we do it manually
     
-    train_X,train_Y,val_X,val_Y,test_X,test_Y,test_Y_raw,train_Y_Hot,val_Y_Hot,test_Y_Hot=splitting_data(data_x,data_y)
+    train_X,train_Y,val_X,val_Y,test_X,test_Y=splitting_and_shape_data(data_x,data_y)
+    train_Y_Hot,val_Y_Hot,test_Y_Hot=one_hot(train_Y,val_Y,test_Y)
+    
+#SCALE THE SETS BETWEEN 0-1
+    scaler=MinMaxScaler().fit(train_X)
+    train_X=scaler.transform(train_X) 
+   
+    scaler=MinMaxScaler().fit(val_X)
+    val_X=scaler.transform(val_X)  
+    
+    scaler=MinMaxScaler().fit(test_X)
+    test_X=scaler.transform(test_X)  
+
+#RESHAPE THE DATA TO FIT LSTMs samples, timesteps, sensors  FORMAT
+    train_X=reshape_for_Lstm(train_X)
+    val_X=reshape_for_Lstm(val_X)
+    test_X=reshape_for_Lstm(test_X)
+
+# %%
+# TRAIN THE MODEL...    
+    Train=True
     inputshape_X=(train_X.shape)
     #print(inputshape_X)
     
-    
-    
-# %%
-# TRAIN THE MODEL    
-    Train=True
-
     if Train==True:
-        model=model_setup_seq(inputshape_X)
-        history = model.fit(train_X, train_Y, epochs=80, batch_size=32, validation_data=(val_X, val_Y), shuffle=False)
+        #model=model_setup_seq(inputshape_X)
+        #history = model.fit(train_X, train_Y, epochs=80, batch_size=32, validation_data=(val_X, val_Y), shuffle=False)
     
         model=model_setup_Fapi(inputshape_X)
-        history = model.fit(train_X, [train_Y, train_Y_Hot], epochs=70, batch_size=32, validation_data=(val_X, [val_Y,val_Y_Hot]), shuffle=False)
-        plot_training(history,saving=True,name=('training'+ str(Future)))  
-        model.save('./model/Pump_LSTM_Fapi_'+ str(Future))
-
-# or load the model  
+        history = model.fit(train_X, [train_Y, train_Y_Hot], epochs=20, batch_size=32, validation_data=(val_X, [val_Y,val_Y_Hot]), shuffle=False)
+        plot_training([history.history['class_out_loss'],history.history['val_class_out_loss']],
+                      what='loss',
+                      saving=True,
+                      name=('training_'+ str(Future)))  
+        plot_training([history.history['class_out_acc'],history.history['val_class_out_acc']],
+                      what='acc',
+                      saving=True,
+                      name=('training_'+ str(Future))) 
+        model.save('./model/Pump_LSTM_Fapi_4_'+ str(Future))
+        
+# ...OR LOAD THE MODELl  
     else:  
         model=tf.keras.models.load_model('./model/Pump_LSTM_Fapi')
-    
-#Inference
+        
+# %%    
+# INFERENCE
     # make a prediction
     [yhat,yclass] = model.predict(test_X)    
     Yclass=[np.argmax(yclass[i],0) for i in range(len(yclass))] # get final class
     
-    plot_signal_hat(yhat,test_Y,saving=True, name='Prediction_Signal_fapi_'+ str(Future))
-    plot_signal_hat(Yclass,test_Y_raw,saving=True, name='Prediction_class_fapi_'+ str(Future))
+    plot_signal_hat(yhat,test_Y,saving=True, name='Prediction_Signal_fapi3_42_'+ str(Future))
+    plot_signal_hat(Yclass,test_Y,saving=True, name='Prediction_class_fapi3_42_'+ str(Future))
 
 
-
-    #For predicting the actual time series, rescale the signal, for our target not neccecscaery
+# %%
+    ##You neede this part only if you want to predict another signal instead of a target. e.g. predict Sensor_42 data.
+    #It rescales the signal back to the orignial amplitudes, as it was transformed to 0-1 before. 
+    # I leave it in for your convenience.
+    
     # test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))
     # # invert scaling for forecast
     

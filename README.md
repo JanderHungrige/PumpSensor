@@ -11,8 +11,10 @@ After a first analysis, we will use a simple LSTM to predict 10min into the futu
 <br><br>
 **Files:**
 
-Sensor_analysis.py : Here we will analyze and manipulate the sensor data. This incorporates several plot functions to visualize the data.
-Sensor_learning.py : Here we create the time series for prediction, set up and train the LSTM. The model is saved into a */model* folder. Result plots are generated
+**Sensor_analysis.py** : Here we will analyze and manipulate the sensor data. This incorporates several plot functions to visualize the data.  
+**Sensor_learning.py** : Here we create the time series for prediction, set up and train the LSTM. The model is saved into a */model* folder. Result plots are generated  
+**Sensor_learning_OOP.py** :This file has the same functionallity as the *Sensor_learning.py* file, however, it is coded object oriented. This is meant for better implementation, but also for people learning OOP to compare both files and see the differneces. The *Sensor_learning.py* might be easier to read/understand for some.  
+**printing_functions.py** : This file is used by the *Sensor_learning_OOP.py* file
 <br><br>
 
 **Quick Peak:**
